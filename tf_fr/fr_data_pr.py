@@ -10,9 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
-
+import inception_preprocessing as inception3_pp
 # image supposed to have shape: 480 x 640 x 3 = 921600
 IMAGE_PATH = '/home/nick/datasets/myphoto'
+import my_FLAGS as FLAGS
+
+
+FLAGS.batch_size = 4
+FLAGS.num_preprocessing_threads = 2
+FLAGS.train_image_size = 299
 
 def get_image_filepath_label(file_dir_root):
     counter = 0
@@ -114,6 +120,9 @@ def read_tfrecord(tfrecord_file):
                 label_out, image_out, shape_out, idx_out = sess.run([label, image, shape, idx])
                 print('idx is ', idx_out)
                 print('label is ', label_out.decode('utf-8'))
+                plt.imshow(image_out)
+                plt.title(label_out.decode('utf-8'))
+                plt.show()
         except tf.errors.OutOfRangeError as e:
             coord.request_stop(e)
 
@@ -124,6 +133,48 @@ def read_tfrecord(tfrecord_file):
         # plt.imshow(image)
         # plt.title(label.decode('utf-8'))
         # plt.show()
+def read_tfrecord_batch(tfrecord_file):
+
+    label, shape, image, idx = read_from_tfrecord([tfrecord_file])
+
+    image_preprocessing_fn = inception3_pp.preprocess_image
+    #train_image_size = FLAGS.train_image_size or network_fn.default_image_size
+    train_image_size = FLAGS.train_image_size
+    image = image_preprocessing_fn(image, train_image_size, train_image_size, is_training=True)
+
+    images, labels = tf.train.batch(
+        [image, label],
+        batch_size=FLAGS.batch_size,
+        num_threads=FLAGS.num_preprocessing_threads,
+        capacity=5 * FLAGS.batch_size)
+
+
+    with tf.Session() as sess:
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+
+        try:
+            for i in range(6) :
+                labels_out, images_out = sess.run([labels, images])
+                # for j in range(FLAGS.batch_size):
+                #     im = images_out[j]
+                #     la = labels_out[j]
+                #     plt.imshow(im)
+                #     plt.title(la.decode('utf-8'))
+                #     plt.show()
+
+        except tf.errors.OutOfRangeError as e:
+            coord.request_stop(e)
+
+        finally:
+            coord.request_stop()
+            coord.join(threads)
+
+        # plt.imshow(image)
+        # plt.title(label.decode('utf-8'))
+        # plt.show()
+        print('i is ', i)
+        print('j is ', j)
 
 def main():
     # assume the image has the label Chihuahua.
@@ -142,7 +193,8 @@ def main():
     print('photo labels are: ', photo_labels)
 
 
-    read_tfrecord(tfrecord_file)
+    # read_tfrecord(tfrecord_file)
+    read_tfrecord_batch(tfrecord_file)
 
 if __name__ == '__main__':
     main()
